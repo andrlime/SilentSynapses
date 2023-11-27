@@ -14,7 +14,8 @@ from src.Neuron.neuron import Neuron
 
 
 def parse_swc_content(swc_content):
-    """Given the content of an SWC file, create the corresponding SWC table.
+    """
+    Given the content of an SWC file, create the corresponding SWC table.
 
     Parameters
     ----------
@@ -40,7 +41,20 @@ def parse_swc_content(swc_content):
 
 class MouseDataClient(DataClient):
     def __init__(self, cv_uri, cave_uri, cave_api_key, cache_folder):
-        """Class to fetch mouse synapse data from a given CloudVolume source."""
+        """
+        Initializes client to fetch mouse synapse data from a given CloudVolume source.
+
+        Parameters
+        ----------
+        cv_uri (str):
+            The URI for the CloudVolume data source.
+        cave_uri (str):
+            The URI for the CAVE data source.
+        cave_api_key (str):
+            The API key for authenticating with the CAVE source.
+        cache_folder (str):
+            The path to the folder used for caching data.
+        """
         self.cv_uri = cv_uri
         self.cave_uri = cave_uri
 
@@ -57,19 +71,40 @@ class MouseDataClient(DataClient):
         self.cache_folder = cache_folder
 
     def change_cloud_uri(self, new_uri) -> None:
-        """Method for connecting to a new CloudVolume data source."""
+        """
+        Method for connecting to a new CloudVolume data source.
+        
+        Parameters
+        ----------
+        new_uri (str):
+            The new CloudVolume URI
+        """
         self.cv_connection = cloudvolume.CloudVolume(new_uri)
 
     def change_cave_uri(self, new_uri) -> None:
-        """Method for connecting to a new CAVEclient data source."""
+        """
+        Method for connecting to a new CAVEclient data source.
+        
+        Parameters
+        ----------
+        new_uri (str):
+            The new CAVEclient URI
+        """
         self.cave_connection = CAVEclient(new_uri)
 
     def get_proofread_neurons(self):
-        """Method to fetch and save proofread neurons from a given data source"""
+        """
+        Method to fetch and save proofread neurons from a given data source
+        
+        Parameters
+        ----------
+        (none)
+        """
         proofreads = self.cave_connection.materialize.query_table(
             "proofreading_status_public_release",
             filter_equal_dict={"status_axon": "extended"},
         )
+
         self.proofread = proofreads
         return proofreads
 
@@ -77,6 +112,13 @@ class MouseDataClient(DataClient):
         """
         Skeletonize a given cell_id. If already in cache, then restore cached one.
         Else, skeletonize it and cache as a file. Returns both the mesh and skeleton.
+
+        Parameters
+        ----------
+        cell_id (int):
+            The Neuron ID to skeletonize
+        force_fresh (bool, default=False):
+            Whether to forcibly not used cached files (in some cases, can be faster)
         """
         # Attempt to fetch mesh from cache. If mesh does
         # not exist in cache, assume skeleton is trash too.
@@ -184,7 +226,16 @@ class MouseDataClient(DataClient):
         return mesh, skel
 
     def get_synapses(self, cell_id, is_pre=False) -> pd.DataFrame:
-        """Get synapses from a data source and return the full DataFrame."""
+        """
+        Get synapses from a data source and return the full DataFrame.
+        
+        Parameters
+        ----------
+        cell_id (int):
+            The Neuron ID to skeletonize
+        is_pre (bool, default=False):
+            Whether to get pre synaptical sites if true, or post if false
+        """
         if cell_id < 0:
             raise Exception(f"cell_id must be positive, but got {cell_id}")
 
@@ -269,7 +320,12 @@ class MouseDataClient(DataClient):
 
     def get_neuron_by_id(self, cell_id) -> Neuron:
         """
-        Abstract method to a neuron by cell_id
+        Method to initialize a neuron by cell_id, wrapping everything
+
+        Parameters
+        ----------
+        cell_id (int):
+            The Neuron ID to turn into an object
         """
         mesh, skeleton = self.skeletonize(cell_id)
         pre_synapses = self.get_synapses(cell_id, is_pre=True)

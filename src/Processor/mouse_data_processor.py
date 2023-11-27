@@ -31,6 +31,13 @@ class MouseDataProcessor(DataProcessor):
         Method to extract a specific synapse given location and return
         the synapse as a NetworkX graph, along with the corresponding
         surrounding mesh.
+
+        Parameters
+        ----------
+        cell_id (float):
+            The neuron on which the synapse lies
+        synapse_location ((float, float, float)):
+            Coordinate of the synapse being extracted.
         """
         return False, False
 
@@ -41,18 +48,37 @@ class MouseDataProcessor(DataProcessor):
         Filters out the "bad" data:
             1. Must be relatively straight, use PCA
             2. No acute angles, use dot product
+
+        Parameters
+        ----------
+        synapse_graph (NetworkX Graph):
+            Network representation of the synapse
+        synapse_mesh (CloudVolume Mesh):
+            Mesh representation of the surrounding region
         """
         pass
 
     def measure_head_to_neck_ratio(self, synapse_graph, synapse_mesh) -> float:
         """
         Method to, given a synapse and mesh, measure its head to neck ratio.
+
+        Parameters
+        ----------
+        synapse_graph (NetworkX Graph):
+            Network representation of the synapse
+        synapse_mesh (CloudVolume Mesh):
+            Mesh representation of the surrounding region
         """
         pass
 
     def measure_all_synapses(self, cell_id):
         """
         Method to measure all synapses head/neck ratios from a neuron.
+
+        Parameters
+        ----------
+        cell_id (float):
+            Neuron ID to measure all synapses for
         """
         neuron = self.neuron_storage.get_neuron(cell_id=cell_id)
         self_pre_ratios, self_post_ratios = [], []
