@@ -6,3 +6,4 @@ proofread_list
 out/
 *.out
 *.csv
+job.sh
