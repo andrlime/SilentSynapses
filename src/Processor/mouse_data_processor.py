@@ -3,9 +3,12 @@ from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
 import networkx as nx
+import trimesh
 from tqdm import tqdm
 from scipy.spatial.distance import cdist, euclidean
 from sklearn.decomposition import PCA
+from scipy.spatial.transform import Rotation as R
+from scipy.spatial import ConvexHull, convex_hull_plot_2d
 
 from src.Processor.data_processor import DataProcessor
 from src.Neuron.neuron_store import NeuronStore
@@ -264,7 +267,9 @@ class MouseDataProcessor(DataProcessor):
 
         # Prune nodes not in the main spine
         nodes_to_remove = [
-            node for node in neuron_graph.nodes if int(node) not in np.array(main_spine).astype(int)
+            node
+            for node in neuron_graph.nodes
+            if int(node) not in np.array(main_spine).astype(int)
         ]
 
         neuron_graph.remove_nodes_from(nodes_to_remove)
@@ -300,8 +305,10 @@ class MouseDataProcessor(DataProcessor):
 
         # Extract the part of the mesh by filtering some coordinates
         smaller_rad = self.radius_of_interest / 5  # TODO: add as class member
-        filtered_coordinates = skeleton_df[skeleton_df['node_id'].isin(np.array(main_spine).astype(int))]
-        coordinates_cleaned = filtered_coordinates[['x', 'y', 'z']].to_numpy()
+        filtered_coordinates = skeleton_df[
+            skeleton_df["node_id"].isin(np.array(main_spine).astype(int))
+        ]
+        coordinates_cleaned = filtered_coordinates[["x", "y", "z"]].to_numpy()
 
         nearby_mesh, nearby_indices = get_nearby_mesh_vertices(
             mesh, coordinates_cleaned, smaller_rad
@@ -380,18 +387,159 @@ class MouseDataProcessor(DataProcessor):
         angles_bad = contains_acute_angles(synapse_graph)
         return pca_ok and (not angles_bad)
 
-    def measure_head_to_neck_ratio(self, synapse_graph, synapse_mesh) -> float:
+    def measure_head_to_neck_ratio(
+        self, center_point, synapse_graph, synapse_mesh
+    ) -> float:
         """
         Method to, given a synapse and mesh, measure its head to neck ratio.
 
         Parameters
         ----------
+        center_point ([float, float, float]):
+            The approximate location of the synapse as determined
+            by the proofread data. It is assumed, perhaps incorrectly
+            so, that the center_point is closer to the head than the tail.
         synapse_graph (NetworkX Graph):
             Network representation of the synapse
-        synapse_mesh (CloudVolume Mesh):
-            Mesh representation of the surrounding region
+        synapse_mesh ((mesh, faces)):
+            Mesh representation of the surrounding region - returned from
+            previous function as a tuple (mesh, faces)
         """
-        pass
+        ending_nodes = [node for node, degree in synapse_graph.degree() if degree == 1]
+        farthest_node = 0
+        farthest_dist = 0
+
+        for node in ending_nodes:
+            pos = np.array(
+                (
+                    synapse_graph.nodes[node]["x"],
+                    synapse_graph.nodes[node]["y"],
+                    synapse_graph.nodes[node]["z"],
+                )
+            )
+            cntr = np.array(list(center_point))
+            difference_in_psn = pos - cntr
+            difference_squared = (
+                (difference_in_psn[0] ** 2)
+                + (difference_in_psn[1] ** 2)
+                + (difference_in_psn[2] ** 2)
+            )
+            if (np.sqrt(difference_squared)) > farthest_dist:
+                farthest_node = node
+
+        def traverse_linear_graph(G, start_node):
+            """
+            Traverse the graph in order. Suppose A is the farthest node
+            in a graph with [A - B - C - D - E], then this just returns
+            [A, B, C, D, E]
+
+            Parameters
+            ----------
+            G (nx.Graph):
+                The graph
+            start_node (node_id / int):
+                The node to start from
+            """
+            # Initialize the traversal
+            visited_nodes = [start_node]
+            current_node = start_node
+
+            # Traverse the graph
+            while len(visited_nodes) < G.number_of_nodes():
+                for neighbor in G.neighbors(current_node):
+                    if neighbor not in visited_nodes:
+                        visited_nodes.append(neighbor)
+                        current_node = neighbor
+                        break
+
+            return visited_nodes
+
+        nodes_in_order = traverse_linear_graph(synapse_graph, farthest_node)
+
+        counter = 0
+        all_areas = []
+        for node_index in range(len(nodes_in_order) - 1):
+            # Get normal vector
+            node1 = nodes_in_order[node_index]
+            node2 = nodes_in_order[node_index + 1]
+            normal_vector = [
+                synapse_graph.nodes[node2]["x"] - synapse_graph.nodes[node1]["x"],
+                synapse_graph.nodes[node2]["y"] - synapse_graph.nodes[node1]["y"],
+                synapse_graph.nodes[node2]["z"] - synapse_graph.nodes[node1]["z"],
+            ]
+
+            # Normalize the vector by dividing each component by the magnitude
+            magnitude = np.linalg.norm(normal_vector)
+            normalized_vector = normal_vector / magnitude
+
+            # Create a rotation matrix to make it flat
+            dX, dY, dZ = (
+                normalized_vector[0],
+                normalized_vector[1],
+                normalized_vector[2],
+            )
+            angle_x = np.arccos(dZ / (dY * dY + dZ * dZ) ** 0.5)
+            angle_y = np.arccos(dZ / (dX * dX + dZ * dZ) ** 0.5)
+            angle_z = np.arccos(dX / (dY * dY + dX * dX) ** 0.5)
+            rotation_matrix = R.from_euler("xyz", [angle_x, angle_y, angle_z])
+
+            iteration_count = 5  # TODO: maybe add to class, but doesn't really matter
+            for j in range(iteration_count):
+                cntr_pnt = [
+                    synapse_graph.nodes[node1]["x"]
+                    + (j / iteration_count) * normal_vector[0],
+                    synapse_graph.nodes[node1]["y"]
+                    + (j / iteration_count) * normal_vector[1],
+                    synapse_graph.nodes[node1]["z"]
+                    + (j / iteration_count) * normal_vector[2],
+                ]
+
+                mesh_trimesh = trimesh.Trimesh(
+                    vertices=synapse_mesh[0], faces=synapse_mesh[1]
+                )
+                slice_trimesh = mesh_trimesh.section(
+                    plane_origin=cntr_pnt, plane_normal=([dX, dY, dZ])
+                )
+
+                if slice_trimesh is None:
+                    continue
+                else:
+                    rotated_xyz = []
+                    for k in np.array(slice_trimesh.vertices):
+                        rotated_xyz.append(rotation_matrix.apply(k))
+
+                    rotated_xyz = np.transpose(rotated_xyz)
+                    hull = ConvexHull(np.transpose([rotated_xyz[0], rotated_xyz[1]]))
+                    all_areas.append([counter, hull.area**0.5])
+                    counter += 1
+
+        def compute_min_max(l):
+            """
+            Compute the min, max, and ratio
+
+            Parameters
+            ----------
+            l:
+                The list
+            """
+            if l[0] > l[len(l) - 1]:
+                l = np.flip(l)
+
+            min_val, min_idx = min((value, idx) for idx, value in enumerate(l))
+            max_val, max_idx = max(
+                (value, idx) for idx, value in enumerate(l[min_idx:])
+            )
+
+            return min_val, max_val, max_val / min_val
+
+        moving_avg = []
+        window_size = 3
+        raw_data = np.array(all_areas).T[1]
+        for j in range(len(raw_data) - 4):
+            moving_avg.append(np.sum(raw_data[j : j + 4]) / 4)
+
+        min_width, max_width, ratio = compute_min_max(moving_avg)
+        return ratio
 
     def measure_all_synapses(self, cell_id):
         """
@@ -413,15 +561,20 @@ class MouseDataProcessor(DataProcessor):
             fetch_attempt += 1
 
             try:
-                extracted_graph, extracted_mesh, extracted_coords = self.extract_synapse(
-                    cell_id, [synapse.x, synapse.y, synapse.z]
-                )
+                syn_location = [synapse.x, synapse.y, synapse.z]
+                (
+                    extracted_graph,
+                    extracted_mesh,
+                    extracted_coords,
+                ) = self.extract_synapse(cell_id, syn_location)
 
                 if self.filter_synapse(extracted_coords, extracted_graph):
                     print(f"Accepted synapse {synapse.id}")
-                    self_pre_ratios.append(
-                        self.measure_head_to_neck_ratio(extracted_graph, extracted_mesh)
+                    measurement = self.measure_head_to_neck_ratio(
+                        syn_location, extracted_graph, extracted_mesh
                     )
+                    print(f"Found ratio {measurement}")
+                    self_pre_ratios.append(measurement)
                 else:
                     print(f"Rejected synapse {synapse.id}")
             except Exception as e:
@@ -430,18 +583,25 @@ class MouseDataProcessor(DataProcessor):
 
             if self.check_remote:
                 try:
-                    other_extracted_graph, other_extracted_mesh, other_extracted_coords = self.extract_synapse(
+                    syn_location = [synapse.other_x, synapse.other_y, synapse.other_z]
+                    (
+                        other_extracted_graph,
+                        other_extracted_mesh,
+                        other_extracted_coords,
+                    ) = self.extract_synapse(
                         synapse.post_pt_root_id,
-                        [synapse.other_x, synapse.other_y, synapse.other_z],
+                        syn_location,
                     )
 
-                    if self.filter_synapse(other_extracted_coords, other_extracted_graph):
+                    if self.filter_synapse(
+                        other_extracted_coords, other_extracted_graph
+                    ):
                         print(f"Accepted synapse {synapse.id}")
-                        remote_post_ratios.append(
-                            self.measure_head_to_neck_ratio(
-                                other_extracted_graph, other_extracted_mesh
-                            )
+                        measurement = self.measure_head_to_neck_ratio(
+                            syn_location, other_extracted_graph, other_extracted_mesh
                         )
+                        print(f"Found ratio {measurement}")
+                        remote_post_ratios.append(measurement)
                     else:
                         print(f"Rejected synapse {synapse.id}")
                 except Exception as e:
@@ -454,15 +614,20 @@ class MouseDataProcessor(DataProcessor):
             fetch_attempt += 1
 
             try:
-                extracted_graph, extracted_mesh, extracted_coords = self.extract_synapse(
-                    cell_id, [synapse.x, synapse.y, synapse.z]
-                )
+                syn_location = [synapse.x, synapse.y, synapse.z]
+                (
+                    extracted_graph,
+                    extracted_mesh,
+                    extracted_coords,
+                ) = self.extract_synapse(cell_id, syn_location)
 
                 if self.filter_synapse(extracted_coords, extracted_graph):
                     print(f"Accepted synapse {synapse.id}")
-                    self_post_ratios.append(
-                        self.measure_head_to_neck_ratio(extracted_graph, extracted_mesh)
+                    measurement = self.measure_head_to_neck_ratio(
+                        syn_location, extracted_graph, extracted_mesh
                     )
+                    print(f"Found ratio {measurement}")
+                    remote_post_ratios.append(measurement)
                 else:
                     print(f"Rejected synapse {synapse.id}")
             except Exception as e:
@@ -471,18 +636,24 @@ class MouseDataProcessor(DataProcessor):
 
             if self.check_remote:
                 try:
-                    other_extracted_graph, other_extracted_mesh, other_extracted_coords = self.extract_synapse(
+                    syn_location = [synapse.other_x, synapse.other_y, synapse.other_z]
+                    (
+                        other_extracted_graph,
+                        other_extracted_mesh,
+                        other_extracted_coords,
+                    ) = self.extract_synapse(
                         synapse.pre_pt_root_id,
-                        [synapse.other_x, synapse.other_y, synapse.other_z],
+                        syn_location,
                     )
 
-                    if self.filter_synapse(other_extracted_coords, other_extracted_graph):
+                    if self.filter_synapse(
+                        other_extracted_coords, other_extracted_graph
+                    ):
                         print(f"Accepted synapse {synapse.id}")
-                        remote_pre_ratios.append(
-                            self.measure_head_to_neck_ratio(
-                                other_extracted_graph, other_extracted_mesh
-                            )
+                        measurement = self.measure_head_to_neck_ratio(
+                            syn_location, other_extracted_graph, other_extracted_mesh
                         )
+                        remote_pre_ratios.append(measurement)
                     else:
                         print(f"Rejected synapse {synapse.id}")
                 except Exception as e:

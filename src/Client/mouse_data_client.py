@@ -32,7 +32,7 @@ def parse_swc_content(swc_content):
 
     columns = ["node_id", "label", "x", "y", "z", "radius", "parent_id"]
     skeleton_df = pd.DataFrame(skeleton_data, columns=columns)
-    skeleton_df['node_id'] = skeleton_df['node_id'].astype(int)
+    skeleton_df["node_id"] = skeleton_df["node_id"].astype(int)
 
     # Drop the 'label' column
     skeleton_df.drop("label", axis=1, inplace=True)

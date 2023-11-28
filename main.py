@@ -25,6 +25,7 @@ from tqdm import tqdm
 # Environment variables
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Local imports
@@ -37,12 +38,63 @@ rng = np.random.RandomState(1)
 print("Successfully imported all libraries!")
 
 API_KEY = os.getenv("CC_API")
-CV_URI = "precomputed://https://storage.googleapis.com/iarpa_microns/minnie/minnie65/seg"
+CV_URI = (
+    "precomputed://https://storage.googleapis.com/iarpa_microns/minnie/minnie65/seg"
+)
 CAVE_URI = "minnie65_public_v117"
 CACHE = "~/silent_synapses/cache"
+OUTPUT_FOLDER = "~/silent_synapses/out"
 
 data_client = MouseDataClient(CV_URI, CAVE_URI, API_KEY, CACHE)
 proofread_synapses = data_client.get_proofread_neurons()
-data_processor = MouseDataProcessor(radius_of_interest=2500, pca_threshold=0.9, data_client=data_client, check_remote=False)
+data_processor = MouseDataProcessor(
+    radius_of_interest=2500,
+    pca_threshold=0.9,
+    data_client=data_client,
+    check_remote=False,
+)
 
-print(data_processor.measure_all_synapses(cell_id=864691136194248918)) # TODO: Multithread
+
+def main_function(cell_id):
+    print(f"Running on cell {cell_id}")
+    (
+        self_pre_ratios,
+        self_post_ratios,
+        remote_pre_ratios,
+        remote_post_ratios,
+    ) = data_processor.measure_all_synapses(
+        cell_id=cell_id
+    )  # TODO: Multithread
+
+    # Write to disk
+    output_file_path = os.path.expanduser(f"{OUTPUT_FOLDER}/ratios/{cell_id}.csv")
+    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+    output_str = f"self_pre,self_post,remote_pre,remote_post\n"
+    max_length = np.max(
+        [
+            len(self_pre_ratios),
+            len(remote_pre_ratios),
+            len(self_post_ratios),
+            len(remote_post_ratios),
+        ]
+    )
+    output_data = np.array(
+        [
+            np.pad(self_pre_ratios, (0, max_length - len(self_pre_ratios))),
+            np.pad(remote_pre_ratios, (0, max_length - len(remote_pre_ratios))),
+            np.pad(self_post_ratios, (0, max_length - len(self_post_ratios))),
+            np.pad(remote_post_ratios, (0, max_length - len(remote_post_ratios))),
+        ]
+    )
+    
+    for output_row in output_data.T:
+        output_str += (
+            f"{output_row[0]},{output_row[1]},{output_row[2]},{output_row[3]}\n"
+        )
+
+    f = open(output_file_path, "w")
+    f.write(output_str)
+    f.close()
+
+
+proofread_synapses.apply(lambda row: main_function(row["valid_id"]), axis=1)
