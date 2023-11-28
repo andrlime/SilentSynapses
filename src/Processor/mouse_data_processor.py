@@ -665,4 +665,5 @@ class MouseDataProcessor(DataProcessor):
             f"Failure rate in fetching non origin synapses - {fetch_fail/fetch_attempt}"
         )
 
+        self.neuron_storage.delete_neuron(cell_id=cell_id)
         return self_pre_ratios, self_post_ratios, remote_pre_ratios, remote_post_ratios

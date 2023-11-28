@@ -44,6 +44,7 @@ CV_URI = (
 CAVE_URI = "minnie65_public_v117"
 CACHE = "~/silent_synapses/cache"
 OUTPUT_FOLDER = "~/silent_synapses/out"
+NUMBER_THREADS = 4
 
 data_client = MouseDataClient(CV_URI, CAVE_URI, API_KEY, CACHE)
 proofread_synapses = data_client.get_proofread_neurons()
@@ -86,7 +87,7 @@ def main_function(cell_id):
             np.pad(remote_post_ratios, (0, max_length - len(remote_post_ratios))),
         ]
     )
-    
+
     for output_row in output_data.T:
         output_str += (
             f"{output_row[0]},{output_row[1]},{output_row[2]},{output_row[3]}\n"
@@ -96,5 +97,9 @@ def main_function(cell_id):
     f.write(output_str)
     f.close()
 
-
-proofread_synapses.apply(lambda row: main_function(row["valid_id"]), axis=1)
+k = int(os.getenv("SLURM_ARRAY_TASK_ID"))
+rows_per_fraction = (len(proofread_synapses) // NUMBER_THREADS)
+start_idx = rows_per_fraction * (k - 1)
+end_idx = start_idx + rows_per_fraction
+print("Starting main loop...")
+proofread_synapses.iloc[start_idx:end_idx].apply(lambda row: main_function(row["valid_id"]), axis=1)

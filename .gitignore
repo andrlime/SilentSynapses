@@ -4,3 +4,5 @@ __pycache__/
 .env
 proofread_list
 out/
+*.out
+*.csv
