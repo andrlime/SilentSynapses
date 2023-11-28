@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
-import cloudvolume
-from caveclient import CAVEclient
+import os
 
+import cloudvolume
 import pandas as pd
 import numpy as np
 import skeletor as sk
-from skeletor import Skeleton
-import os
 import trimesh
+from caveclient import CAVEclient
+from skeletor import Skeleton
 
 from src.Client.data_client import DataClient
 from src.Neuron.neuron import Neuron
@@ -32,6 +32,7 @@ def parse_swc_content(swc_content):
 
     columns = ["node_id", "label", "x", "y", "z", "radius", "parent_id"]
     skeleton_df = pd.DataFrame(skeleton_data, columns=columns)
+    skeleton_df['node_id'] = skeleton_df['node_id'].astype(int)
 
     # Drop the 'label' column
     skeleton_df.drop("label", axis=1, inplace=True)
@@ -73,7 +74,7 @@ class MouseDataClient(DataClient):
     def change_cloud_uri(self, new_uri) -> None:
         """
         Method for connecting to a new CloudVolume data source.
-        
+
         Parameters
         ----------
         new_uri (str):
@@ -84,7 +85,7 @@ class MouseDataClient(DataClient):
     def change_cave_uri(self, new_uri) -> None:
         """
         Method for connecting to a new CAVEclient data source.
-        
+
         Parameters
         ----------
         new_uri (str):
@@ -95,7 +96,7 @@ class MouseDataClient(DataClient):
     def get_proofread_neurons(self):
         """
         Method to fetch and save proofread neurons from a given data source
-        
+
         Parameters
         ----------
         (none)
@@ -158,7 +159,7 @@ class MouseDataClient(DataClient):
 
                 print(f"Successfully fetched mesh {cell_id} from cache")
                 mesh_cached = True
-            except Error as e:
+            except Exception as e:
                 print(f"Unexpected error when fetching mesh {cell_id} from cache")
                 mesh_cached = False
 
@@ -176,7 +177,7 @@ class MouseDataClient(DataClient):
                     )  # TODO: Fix
                     print(f"Successfully fetched skeleton {cell_id} from cache")
                     skel_cached = True
-                except Error as e:
+                except Exception as e:
                     print(
                         f"Unexpected error when fetching skeleton {cell_id} from cache"
                     )
@@ -228,7 +229,7 @@ class MouseDataClient(DataClient):
     def get_synapses(self, cell_id, is_pre=False) -> pd.DataFrame:
         """
         Get synapses from a data source and return the full DataFrame.
-        
+
         Parameters
         ----------
         cell_id (int):

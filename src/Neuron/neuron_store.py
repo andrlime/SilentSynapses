@@ -46,7 +46,7 @@ class NeuronStore:
         # Check if the neuron exists in the NeuronBank's 'neurons' dictionary
         if cell_id in self.neurons:
             # Neuron exists, retrieve and return it from the dictionary
-            return self.client.neurons[cell_id]
+            return self.neurons[cell_id]
         elif add_new:
             # Neuron does not exist, and add_new is True, add the neuron
             return self.add_neuron(

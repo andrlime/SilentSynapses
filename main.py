@@ -43,6 +43,6 @@ CACHE = "~/silent_synapses/cache"
 
 data_client = MouseDataClient(CV_URI, CAVE_URI, API_KEY, CACHE)
 proofread_synapses = data_client.get_proofread_neurons()
-data_processor = MouseDataProcessor(radius_of_interest=2500, pca_threshold=0.9, data_client=data_client)
+data_processor = MouseDataProcessor(radius_of_interest=2500, pca_threshold=0.9, data_client=data_client, check_remote=False)
 
-print(data_processor.measure_all_synapses(cell_id=864691136194248918))
+print(data_processor.measure_all_synapses(cell_id=864691136194248918)) # TODO: Multithread
