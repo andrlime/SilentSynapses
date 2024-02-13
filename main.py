@@ -1,6 +1,7 @@
 # Standard libraries
 import itertools
 import time
+import sys
 from collections import deque
 
 # Third-party libraries
@@ -47,7 +48,7 @@ OUTPUT_FOLDER = "~/silent_synapses/out"
 NUMBER_THREADS = 4
 
 data_client = MouseDataClient(CV_URI, CAVE_URI, API_KEY, CACHE)
-proofread_synapses = data_client.get_proofread_neurons()
+proofread_neurons = data_client.get_proofread_neurons()
 data_processor = MouseDataProcessor(
     radius_of_interest=2500,
     pca_threshold=0.9,
@@ -55,6 +56,29 @@ data_processor = MouseDataProcessor(
     check_remote=False,
 )
 
+# m = set()
+# for n in proofread_neurons.iloc:
+#     m.add(n["valid_id"])
+
+# def count_pairs(cell_id):
+#     pre_syn, post_syn = data_client.get_metadata_by_id(cell_id=cell_id)
+
+#     def count_the_ones_that_exist(col_name, df):
+#         subcount, totalcount = 0, 0
+
+#         for row in df.iloc:
+#             if row[col_name] in m:
+#                 subcount += 1
+#             totalcount += 1
+
+#         return subcount, totalcount
+
+#     s1, t1 = count_the_ones_that_exist("post_pt_root_id", pre_syn)
+#     s2, t2 = count_the_ones_that_exist("pre_pt_root_id", post_syn)
+#     print(cell_id, s1, t1, s2, t2)
+
+# proofread_neurons.apply(lambda row: count_pairs(row["valid_id"]), axis=1)
+# sys.exit()
 
 def main_function(cell_id):
     output_file_path = os.path.expanduser(f"{OUTPUT_FOLDER}/ratios/{cell_id}.csv")
@@ -104,10 +128,10 @@ def main_function(cell_id):
 k = os.getenv("SLURM_ARRAY_TASK_ID")
 if not isinstance(k, type(None)):
     k = int(k)
-    rows_per_fraction = (len(proofread_synapses) // NUMBER_THREADS)
+    rows_per_fraction = (len(proofread_neurons) // NUMBER_THREADS)
     start_idx = rows_per_fraction * (k - 1)
     end_idx = start_idx + rows_per_fraction
     print("Starting main loop...")
-    proofread_synapses.iloc[start_idx:end_idx].apply(lambda row: main_function(row["valid_id"]), axis=1)
+    proofread_neurons.iloc[start_idx:end_idx].apply(lambda row: main_function(row["valid_id"]), axis=1)
 else:
-    proofread_synapses.apply(lambda row: main_function(row["valid_id"]), axis=1)
+    proofread_neurons.apply(lambda row: main_function(row["valid_id"]), axis=1)

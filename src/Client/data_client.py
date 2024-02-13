@@ -54,3 +54,8 @@ class DataClient(ABC):
         Abstract method to a neuron by cell_id
         """
         pass
+
+    def get_metadata_by_id(self, cell_id):
+        """
+        Abstract method to get a neuron's metadata
+        """

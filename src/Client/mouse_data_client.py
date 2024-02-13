@@ -283,13 +283,9 @@ class MouseDataClient(DataClient):
         synapses = pd.concat([synapses, other_positions], axis=1)
 
         # Add and convert 'id', 'pre_pt_root_id', and 'post_pt_root_id' to numeric, coercing errors to NaN
-        synapses["id"] = pd.to_numeric(synapses_dataframe["id"], errors="coerce")
-        synapses["pre_pt_root_id"] = pd.to_numeric(
-            synapses_dataframe["pre_pt_root_id"], errors="coerce"
-        )
-        synapses["post_pt_root_id"] = pd.to_numeric(
-            synapses_dataframe["post_pt_root_id"], errors="coerce"
-        )
+        synapses["id"] = synapses_dataframe["id"].astype(str)
+        synapses["pre_pt_root_id"] = synapses_dataframe["pre_pt_root_id"].astype(str)
+        synapses["post_pt_root_id"] = synapses_dataframe["post_pt_root_id"].astype(str)
 
         # Drop rows with NaN in any of these columns
         synapses = synapses.dropna(subset=["id", "pre_pt_root_id", "post_pt_root_id"])
@@ -316,7 +312,6 @@ class MouseDataClient(DataClient):
 
         # TODO: Add caching into cache/synapse_locations
         # Low priority, as this is a fast operation, while skeletonizing is much slower.
-
         return synapses
 
     def get_neuron_by_id(self, cell_id) -> Neuron:
@@ -332,3 +327,16 @@ class MouseDataClient(DataClient):
         pre_synapses = self.get_synapses(cell_id, is_pre=True)
         post_synapses = self.get_synapses(cell_id, is_pre=False)
         return Neuron(mesh, skeleton, pre_synapses, post_synapses)
+
+    def get_metadata_by_id(self, cell_id) -> (pd.DataFrame, pd.DataFrame):
+        """
+        Method to initialize a neuron by cell_id, wrapping everything
+
+        Parameters
+        ----------
+        cell_id (int):
+            The Neuron ID to turn into an object
+        """
+        pre_synapses = self.get_synapses(cell_id, is_pre=True)
+        post_synapses = self.get_synapses(cell_id, is_pre=False)
+        return (pre_synapses, post_synapses)
