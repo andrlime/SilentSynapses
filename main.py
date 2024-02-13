@@ -57,6 +57,12 @@ data_processor = MouseDataProcessor(
 
 
 def main_function(cell_id):
+    output_file_path = os.path.expanduser(f"{OUTPUT_FOLDER}/ratios/{cell_id}.csv")
+    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+    if os.path.isfile(output_file_path):
+        print(f"Already measured synapses for neuron {cell_id}")
+        return
+
     print(f"Running on cell {cell_id}")
     (
         self_pre_ratios,
@@ -67,9 +73,7 @@ def main_function(cell_id):
         cell_id=cell_id
     )  # TODO: Multithread
 
-    # Write to disk
-    output_file_path = os.path.expanduser(f"{OUTPUT_FOLDER}/ratios/{cell_id}.csv")
-    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+    # Write to disk 
     output_str = f"self_pre,self_post,remote_pre,remote_post\n"
     max_length = np.max(
         [
@@ -97,9 +101,13 @@ def main_function(cell_id):
     f.write(output_str)
     f.close()
 
-k = int(os.getenv("SLURM_ARRAY_TASK_ID"))
-rows_per_fraction = (len(proofread_synapses) // NUMBER_THREADS)
-start_idx = rows_per_fraction * (k - 1)
-end_idx = start_idx + rows_per_fraction
-print("Starting main loop...")
-proofread_synapses.iloc[start_idx:end_idx].apply(lambda row: main_function(row["valid_id"]), axis=1)
+k = os.getenv("SLURM_ARRAY_TASK_ID")
+if not isinstance(k, type(None)):
+    k = int(k)
+    rows_per_fraction = (len(proofread_synapses) // NUMBER_THREADS)
+    start_idx = rows_per_fraction * (k - 1)
+    end_idx = start_idx + rows_per_fraction
+    print("Starting main loop...")
+    proofread_synapses.iloc[start_idx:end_idx].apply(lambda row: main_function(row["valid_id"]), axis=1)
+else:
+    proofread_synapses.apply(lambda row: main_function(row["valid_id"]), axis=1)

@@ -627,7 +627,7 @@ class MouseDataProcessor(DataProcessor):
                         syn_location, extracted_graph, extracted_mesh
                     )
                     print(f"Found ratio {measurement}")
-                    remote_post_ratios.append(measurement)
+                    self_post_ratios.append(measurement)
                 else:
                     print(f"Rejected synapse {synapse.id}")
             except Exception as e:
