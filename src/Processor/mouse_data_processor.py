@@ -119,7 +119,9 @@ def contains_acute_angles(graph):
 
 
 class MouseDataProcessor(DataProcessor):
-    def __init__(self, radius_of_interest, pca_threshold, data_client, check_remote):
+    def __init__(
+        self, radius_of_interest, pca_threshold, data_client, meshes, check_remote=True
+    ):
         """
         Initializes a processor for mouse neuron data. Configs the radius of interest.
 
@@ -131,13 +133,23 @@ class MouseDataProcessor(DataProcessor):
             The threshold value for Principal Component Analysis.
         data_client (object)
             The data client used for accessing neuron data.
-        check_remote (bool)
+        meshes (DataFrame)
+            List of somas with available meshes
+        check_remote (bool) [[unused]]
             Whether to check the other end for each synapse
         """
         self.radius_of_interest = radius_of_interest
         self.pca_threshold = pca_threshold
         self.neuron_storage = NeuronStore(data_client)
         self.check_remote = check_remote
+
+        # use the meshes dataframe to create a SET of cell IDs that are valid
+        # we don't care too much about the actual meshes... for now
+        self.meshes = set()
+        for row in meshes.iloc:
+            self.meshes.add(str(int(row.id)))
+
+        print(self.meshes)
 
     def longest_path(self, original_graph, closest_node):
         """
@@ -544,6 +556,7 @@ class MouseDataProcessor(DataProcessor):
     def measure_all_synapses(self, cell_id):
         """
         Method to measure all synapses head/neck ratios from a neuron.
+        Uses the `meshes` member DataFrame to get the remote site too.
 
         Parameters
         ----------
@@ -558,6 +571,7 @@ class MouseDataProcessor(DataProcessor):
 
         print("Extracting pre synaptical sites")
         for synapse in tqdm(neuron.pre_synapses.iloc):
+            print()
             fetch_attempt += 1
 
             try:
@@ -576,12 +590,16 @@ class MouseDataProcessor(DataProcessor):
                     print(f"Found ratio {measurement}")
                     self_pre_ratios.append(measurement)
                 else:
+                    fetch_fail += 1
                     print(f"Rejected synapse {synapse.id}")
             except Exception as e:
+                fetch_fail += 1
                 print(f"error for synapse {synapse.id} - {e}")
                 continue
 
-            if self.check_remote:
+            # Check the other side iff that node is in the meshes set
+            if str(synapse.post_pt_root_id) in self.meshes:
+                print(f"*******Sibling synapse {synapse.pre_pt_root_id} AVAILABLE")
                 try:
                     syn_location = [synapse.other_x, synapse.other_y, synapse.other_z]
                     (
@@ -603,14 +621,20 @@ class MouseDataProcessor(DataProcessor):
                         print(f"Found ratio {measurement}")
                         remote_post_ratios.append(measurement)
                     else:
+                        fetch_fail += 1
                         print(f"Rejected synapse {synapse.id}")
                 except Exception as e:
                     fetch_fail += 1
                     print(f"error: {e}")
                     continue
+            else:
+                print(f"Sibling synapse {synapse.post_pt_root_id} unavailable")
+
+            print()
 
         print("Extracting post synaptical sites")
         for synapse in tqdm(neuron.post_synapses.iloc):
+            print()
             fetch_attempt += 1
 
             try:
@@ -629,12 +653,16 @@ class MouseDataProcessor(DataProcessor):
                     print(f"Found ratio {measurement}")
                     self_post_ratios.append(measurement)
                 else:
+                    fetch_fail += 1
                     print(f"Rejected synapse {synapse.id}")
             except Exception as e:
+                fetch_fail += 1
                 print(f"error for synapse {synapse.id} - {e}")
                 continue
 
-            if self.check_remote:
+            # Check the other side iff that node is in the meshes set
+            if str(synapse.pre_pt_root_id) in self.meshes:
+                print(f"*******Sibling synapse {synapse.pre_pt_root_id} AVAILABLE")
                 try:
                     syn_location = [synapse.other_x, synapse.other_y, synapse.other_z]
                     (
@@ -655,14 +683,19 @@ class MouseDataProcessor(DataProcessor):
                         )
                         remote_pre_ratios.append(measurement)
                     else:
+                        fetch_fail += 1
                         print(f"Rejected synapse {synapse.id}")
                 except Exception as e:
                     fetch_fail += 1
                     print(f"error: {e}")
                     continue
+            else:
+                print(f"Sibling synapse {synapse.pre_pt_root_id} unavailable")
+
+            print()
 
         print(
-            f"Failure rate in fetching non origin synapses - {fetch_fail/fetch_attempt}"
+            f"Rejection rate in fetching synapses - {fetch_fail/fetch_attempt}"
         )
 
         self.neuron_storage.delete_neuron(cell_id=cell_id)

@@ -93,21 +93,32 @@ class MouseDataClient(DataClient):
         """
         self.cave_connection = CAVEclient(new_uri)
 
-    def get_proofread_neurons(self):
+    def get_proofread_neurons(self, somas_file):
         """
         Method to fetch and save proofread neurons from a given data source
 
         Parameters
         ----------
-        (none)
+        somas_file (str):
+            csv spreadsheet with expanded neurons list
         """
         proofreads = self.cave_connection.materialize.query_table(
             "proofreading_status_public_release",
             filter_equal_dict={"status_axon": "extended"},
         )
-
         self.proofread = proofreads
-        return proofreads
+
+        # Check if somas file exists, if not return (proofreads, None)
+        meshes_file_path = os.path.expanduser(somas_file)
+
+        if not os.path.isfile(meshes_file_path):
+            self.meshes = None
+            return proofreads, None
+
+        # Read the meshes spreadsheet, and return a massive dataframe
+        meshes = pd.read_csv(meshes_file_path)
+        self.meshes = meshes
+        return proofreads, meshes
 
     def skeletonize(self, cell_id, force_fresh=False):
         """
@@ -252,6 +263,9 @@ class MouseDataClient(DataClient):
             synapses_dataframe = self.cave_connection.materialize.synapse_query(
                 post_ids=cell_id
             )
+
+        print(synapses_dataframe)
+        exit(-1)
 
         if isinstance(synapses_dataframe, type(None)):
             raise Exception(

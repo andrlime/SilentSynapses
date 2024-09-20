@@ -4,6 +4,26 @@ import skeletor
 from src.Neuron.neuron import Neuron
 
 
+"""
+Some ideas for future development
+---------------------------------
+
+In database management systems, buffer pool managers are used to create an abstraction of
+RAM to eliminate mmap (memory mapping), and are more efficient. We can consider implementing
+a buffer pool manager for neurons, which reduces the memory intensity, as it will evict
+neurons that have not been accessed in a while after the BPM is full. The algorithm that
+can be used here is LRU-k Eviction, which is based on "Least Recently Used" but is
+more optimized for general use cases.
+
+For more, read this paper https://www.cs.cmu.edu/~natassa/courses/15-721/papers/p297-o_neil.pdf
+
+Data structures can also be optimized, though if memory consumption is an issue, the above
+is much more likely to alleviate memory usage, though may increase processing time. Then again,
+because this is written in Python, this will take forever anyway. If we really care
+about efficiency, this should be rewritten in C++.
+"""
+
+
 class NeuronStore:
     def __init__(self, client):
         """
